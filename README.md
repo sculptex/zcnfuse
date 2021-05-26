@@ -7,6 +7,13 @@ Fuse library implementation for 0Chain Storage
 * Based on hello example by Bazil.org
 ## PRE-REQUISITES
 * git clone https://github.com/bazil/fuse.git
+
+## RELEASES
+### v0.0.2
+* Improved Command line paramaters
+* Inherit mountpoint folder ownership for fuse mount
+### v0.0.1
+* Initial Release
 ## TODO
 * Cross-platform compatibility checks (Linux only tested so far)
 * Improve cache (age/delete)
