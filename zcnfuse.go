@@ -14,6 +14,11 @@
 //   Use GoSDK directly instead of CLI tools
 // NOTES
 //   On error, mount may persist but be broken, use https://github.com/bazil/fuse/cmd/fuse-abort to remove broken fuse mounts
+// v0.0.2
+//   Improved parameters
+//   Inherit user permissions of parent (mountpoint folder)
+// v0.0.1
+//   Initial Release
 
 package main
 
@@ -32,13 +37,13 @@ import (
     "os/user"
 	"encoding/json"
 	"strings"
+	"strconv"
      	
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
-	//"bazil.org/fuse/fs/fstestutil"
 )
 
-const version = "0.0.1"
+const version = "0.0.2"
 
 type File struct {
 	fs *FS
@@ -59,10 +64,23 @@ type Dir struct {
 var Filez []File
 var Dirz []Dir
 
+const defaultconfig = "config.yaml"
+const defaultwallet = "wallet.json"
+const defaultallocationfile = "allocation.txt"
+const defaultmountpoint = "zcnfuse"
+
 var zcnpath string
 var cachepath string
 var allocation string
 
+var mountpoint string
+var configfile string
+var allocationfile string
+var walletfile string
+var debug string
+
+var fileuid uint32
+var filegid uint32
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "Usage of %s [allocation]:\n", os.Args[0])
@@ -205,15 +223,15 @@ func listfiles(path string) []filedata {
 				"--remotepath",
 				string(remotepath) }		
 
-		fmt.Printf("ZBOX LIST %s\n", remotepath)
+		if(configfile != defaultconfig) {
+			cmdarray = append( cmdarray, "--config", configfile )	
+		}
 		
-	//	if(configfile != defaultconfig) {
-	//		cmdarray = append( cmdarray, "--config", configfile )	
-	//	}
+		if(walletfile != defaultwallet) {
+			cmdarray = append( cmdarray, "--wallet", walletfile )	
+		}	
 		
-	//	if(walletfile != defaultwallet) {
-	//		cmdarray = append( cmdarray, "--wallet", walletfile )	
-	//	}					
+		fmt.Printf("ZBOX LIST %s\n", remotepath)				
 						
 		head := cmdarray[0]
 		parts := cmdarray[1:len(cmdarray)]
@@ -271,7 +289,11 @@ func (FS) Root() (fs.Node, error) {
 
 func (d *Dir) Attr(ctx context.Context, a *fuse.Attr) error {
 	a.Inode = 1
-	a.Mode = os.ModeDir | 0o555
+	a.Mode = os.ModeDir | 0o751
+	//a.Mode = os.ModeDir | 0o555
+	//a.Mode = os.ModeDir | 0o777
+	a.Uid = fileuid
+	a.Gid = filegid
 	return nil
 }
 
@@ -345,11 +367,19 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 	if(f.kind == "f") {
-		a.Mode = 0o444
+		a.Mode = 0o644
+		//a.Mode = 0o444
+		//a.Mode = 0o777
+		a.Uid = fileuid
+		a.Gid = filegid
 		a.Size = uint64(f.size)
 	}
 	if(f.kind == "d") {
-		a.Mode = os.ModeDir | 0o555
+		a.Mode = os.ModeDir | 0o751
+		//a.Mode = os.ModeDir | 0o555
+		//a.Mode = os.ModeDir | 0o777
+		a.Uid = fileuid
+		a.Gid = filegid
 		a.Size = 0
 	}
 	return nil
@@ -361,8 +391,9 @@ func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
 	remotepath := f.path // "/"
 	
 	safepath := strings.Replace(remotepath, "/", "_", -1)
+	safepath = strings.Replace(safepath, " ", "_", -1)
 
-	localpath := cachepath+"/"+allocation+safepath+"_"+f.name
+	localpath := cachepath+"/"+allocation+safepath //+"_"+f.name
 	
 	fmt.Printf("READALL %s\n", string(f.path))
 
@@ -379,6 +410,14 @@ func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
 				string(remotepath),
 				"--localpath",
 				string(localpath) }		
+				
+		if(configfile != defaultconfig) {
+			cmdarray = append( cmdarray, "--config", configfile )	
+		}
+		
+		if(walletfile != defaultwallet) {
+			cmdarray = append( cmdarray, "--wallet", walletfile )	
+		}					
 		
 		fmt.Printf("ZBOX DOWNLOAD %s\n", remotepath)
 						
@@ -405,6 +444,56 @@ func main() {
 
 	fmt.Printf("VERSION %s\n", version)
 	
+    // Allow user to specify config file    
+    flag.StringVar(&mountpoint, "mountpoint", string(defaultmountpoint), "")
+	
+    // Allow user to specify config file    
+    flag.StringVar(&configfile, "config", string(defaultconfig), "")
+
+    // Allow user to specify wallet file    
+    flag.StringVar(&walletfile, "wallet", string(defaultwallet), "")
+    
+    // Allow user to specify allocation file    
+    flag.StringVar(&allocation, "allocation", string(""), "allocation (default contents of allocation.txt)")
+
+    flag.Parse()
+
+
+	//var fileinfo os.FileInfo
+	
+
+	if mountpoint == defaultmountpoint {
+		if _, err := os.Stat(mountpoint); err == nil {
+			fmt.Printf("MOUNTPOINT %s exists\n", string(mountpoint))
+		} else {
+			err := os.Mkdir(mountpoint, 0755)
+			//err := os.Mkdir(mountpoint, 0777)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("MOUNTPOINT %s created\n", string(mountpoint))
+		}
+	}
+	
+	fileinfo , err := os.Stat(mountpoint)
+	if err != nil {	
+		filesys := fileinfo.Sys()
+		uid := fmt.Sprint(filesys.(*syscall.Stat_t).Uid)
+		fileuid64 , _ := strconv.ParseInt(uid, 10, 32)
+		fileuid = uint32(fileuid64)			
+		gid := fmt.Sprint(filesys.(*syscall.Stat_t).Gid)
+		filegid64 , _ := strconv.ParseInt(gid, 10, 32)	
+		filegid = uint32(filegid64)			
+	}	
+
+	cachepath = "zcncache"	
+	if _, err := os.Stat(cachepath) ; err != nil {
+		err := os.Mkdir(cachepath, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	maxrf = 0
 	
 	user, err := user.Current()
@@ -414,34 +503,16 @@ func main() {
 	zcnpath = user.HomeDir+"/.zcn"
 	
 	fmt.Printf("PATH %s\n", string(zcnpath))
-
-	cachepath = "zcncache"	
-	if _, err := os.Stat(cachepath) ; err != nil {
-		err := os.Mkdir(cachepath, 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
 	
-	flag.Usage = usage
-	flag.Parse()
-
-	if flag.NArg() < 1 {
-		usage()
-		os.Exit(2)
-	}
-	mountpoint := flag.Arg(0)
-
-	if flag.NArg() >= 2 {
-		allocation = flag.Arg(1)
-	} else {
+	
+	if len(allocation) != 64 {
 	    all, err := ioutil.ReadFile(zcnpath+"/allocation.txt")
 	    if err != nil {
 	        os.Exit(3)
 	    }
 	    allocation = string(all)
-	}
-
+	}	
+    
 	addremotedir("/", "/" , "d", 0)
 	    	
 	c, err := fuse.Mount(
