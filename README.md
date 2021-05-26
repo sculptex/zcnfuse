@@ -8,6 +8,19 @@ Fuse library implementation for 0Chain Storage
 ## PRE-REQUISITES
 * git clone https://github.com/bazil/fuse.git
 
+## Example Use
+* zcnfuse -mountpoint test
+* zcnfuse -help
+```
+-allocation string
+    allocation (default contents of allocation.txt)
+-config string
+    (default "config.yaml")
+-mountpoint string
+    (default "zcnfuse")
+-wallet string
+    (default "wallet.json")
+```
 ## RELEASES
 ### v0.0.2
 * Improved Command line paramaters
