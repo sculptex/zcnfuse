@@ -5,8 +5,38 @@ Fuse library implementation for 0Chain Storage
 * By sculptex
 * for Linux
 * Based on hello example by Bazil.org
-## PRE-REQUISITES
-* git clone https://github.com/bazil/fuse.git
+
+# Pre-requisits
+
+Note those are for development purposes, to be able to read/write.
+
+## Install zboxcli
+
+Follow the doc [install zboxcli](https://github.com/0chain/zboxcli/wiki/Build-Linux)
+
+## Create a wallet 
+
+Follow the doc [create a wallet](https://github.com/0chain/zboxcli#Register)
+
+Note you need to uncomment the prefered_blobbers section
+
+## Install zwalletcli
+
+Follow the doc [install zwalletcli](https://github.com/0chain/zwalletcli#1-installation)
+
+## Get some ZCN from the faucet
+
+Follow the doc [get some zcn](https://github.com/0chain/zwalletcli#2-run-zwallet-commands)
+
+## Create a new allocation
+
+Follow the doc [create a new allocation](https://github.com/0chain/zboxcli#create-new-allocation)
+
+
+# Build
+
+go build .
+
 
 ## Example Use
 * zcnfuse -mountpoint test
